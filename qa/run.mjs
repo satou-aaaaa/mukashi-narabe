@@ -110,6 +110,12 @@ try {
   browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
   const page = await newPage();
   check("はじめて開くと遊び方が出る", await page.evaluate(() => document.getElementById("howto").open));
+  { const p0 = await newPage(); let bad = 0;
+    for (let j = 0; j < 10; j++) { await p0.evaluate((K) => localStorage.removeItem(K), KEY); await p0.reload(); await p0.keyboard.press("Escape"); if (await p0.evaluate((K) => !(JSON.parse(localStorage.getItem(K) || "{}").tut), KEY)) bad++; await p0.reload(); if (await p0.evaluate(() => document.getElementById("howto").open)) bad++; }
+    await p0.evaluate((K) => localStorage.removeItem(K), KEY); await p0.reload(); await p0.click("#howto-ok");
+    const atOnce = await p0.evaluate((K) => !!(JSON.parse(localStorage.getItem(K) || "{}").tut), KEY);
+    check("遊び方：Esc で閉じても「見た」が残り、すぐ読み直しても出ない（10回）・「わかった」を押したその場で残る", bad === 0 && atOnce, bad);
+    await p0.close(); }
   await closeHow(page);
   check("ホーム：今日の3話・とことん・上級・練習・お話帳・実績・カレンダーのボタンが最初から押せる", await page.evaluate(() => ["go-d", "go-e", "go-h", "go-p", "go-dex", "go-ach", "go-cal"].every((id) => { const b = document.getElementById(id); return b && !b.disabled; })));
   { const ctx = await browser.newContext(); const p2 = await ctx.newPage(); await p2.goto(url); const d2 = await p2.evaluate(() => JSON.stringify(window.MKG.dailyList("2026-12-24"))); await ctx.close(); check("同じ日は別のブラウザで開いても同じ3話", d2 === JSON.stringify(G.dailyList("2026-12-24"))); }

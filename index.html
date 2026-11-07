@@ -370,7 +370,10 @@ const starStr = (s) => `<span class="stars" role="img" aria-label="星${s}つ">$
 const footer = () => `<footer><a href="#" id="f-how">遊び方</a><a href="#" data-a11y-open>見やすさ</a><a href="#" data-hk>引き継ぎ</a><a href="${FEEDBACK}" target="_blank" rel="noopener">感想を送る</a><a href="https://ko-fi.com/satouaaaaa" target="_blank" rel="noopener">Ko-fi で応援</a></footer>`;
 function bindFooter() { const h = $("f-how"); if (h) h.onclick = (e) => { e.preventDefault(); openHow(); }; }
 function openHow() { $("fb2").href = FEEDBACK; const d = $("howto"); if (d.showModal) d.showModal(); else d.setAttribute("open", ""); }
-$("howto-ok").onclick = () => { const d = $("howto"); d.close ? d.close() : d.removeAttribute("open"); save((s) => { s.tut = true; }); };
+$("howto-ok").onclick = () => { save((s) => { s.tut = true; }); const d = $("howto"); d.close ? d.close() : d.removeAttribute("open"); };
+// Esc・戻る操作で閉じても「見た」を残す（cancel は Esc のその場、close は閉じたあと。incidents/2026-11-07-howto-esc-not-saved.md）
+$("howto").addEventListener("cancel", () => { if (!load().tut) save((s) => { s.tut = true; }); });
+$("howto").addEventListener("close", () => { if (!load().tut) save((s) => { s.tut = true; }); });
 const MODES = { d: "今日の3話", h: "上級", p: "練習", e: "とことん", a: "あとから" };
 let VIEW = 0; // 画面が替わるたびに増やす（遅れて動く処理は、替わっていたら何もしない）
 function later(fn, ms) { const v = VIEW; setTimeout(() => { if (v === VIEW) fn(); }, ms); }

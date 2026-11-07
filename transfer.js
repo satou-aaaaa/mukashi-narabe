@@ -1,5 +1,5 @@
 // 引き継ぎコード（transfer.js）：このゲームの記録を「コード」と「QR」にして、別の端末へ移す。サーバーは使わない。
-// 引き継ぎの版: 7
+// 引き継ぎの版: 8
 // 正：satou-aaaaa/shared-workflows の template/transfer.js（各ゲームはこれをそのまま写す。直すときはひな形を直して配り、版を上げる）
 // 使い方（index.html の <head> の中、ゲームの script より前に、defer を付けずに置く）:
 //   <script src="transfer.js" data-game="kippu-10" data-keys="kippu-v1"></script>
@@ -20,6 +20,8 @@
 //     とても長い貼りつけは、CRC や広げる前に弾く・縮めないコード（HK0）も選べる（広げられない古いブラウザへ送るとき）・
 //     コピーの代わりの道（execCommand）のあと、押したボタンに戻る・コードの途中の空白も読む・
 //     入れ替えたら同じゲームのほかのタブを読み直させる（古いタブの手元の記録で上書きしない）。
+//   - 版8（2026-11-07 CodeRabbit。gogen-suiri #1・mukashi-narabe #1）: 縮めないコード（HK0）は、base64 を戻す前に長さで弾く・
+//     控えに戻したとき、戻す前が空でも「空の記録」を控えに残す（もう一度押せば空に戻せる。前は控えごと消えて行き来できなかった）。
 (function () {
   "use strict";
   var VERSION = 4; // コードの形の版（形を変えたときだけ上げる。上の「引き継ぎの版」とは別）
@@ -221,6 +223,8 @@
       if (s.length > MAX_JSON * 2) throw fail("big");
       var m = s.match(/^HK([01])\.([A-Za-z0-9_-]+)\.([0-9a-z]{1,7})$/);
       if (!m) throw fail("form");
+      // HK0 は中身がそのまま base64。戻す前に、戻した大きさ（4 文字で 3 バイト）が MAX_JSON を超えないかを見る（版8）
+      if (m[1] === "0" && Math.floor(m[2].length * 3 / 4) > MAX_JSON) throw fail("big");
       var bytes;
       try { bytes = unb64(m[2]); } catch (e) { throw fail("form"); }
       if (crc32(bytes) !== m[3]) throw fail("crc");
@@ -263,7 +267,8 @@
         // 控えに戻す：控え（job.d と同じ中身）は入れ替えが済むまで上書きしない。途中で止まっても、もう一度「控えに戻す」で戻せる（版5）
         try { replaceAll(job.d); } catch (e) { partial = e.rolledBack === false; throw e; }
         // 済んだら、戻す前の記録を控えにする（もう一度押すと戻る）。控えを書けなければ、戻す前の記録の写しが無くなるので入れ替えを戻す
-        try { if (count(cur)) localStorage.setItem(BACKUP, JSON.stringify({ at: new Date().toISOString(), d: cur })); else localStorage.removeItem(BACKUP); } catch (e) {
+        // 戻す前が空でも、空の記録を控えにする（消すと、もう一度押して行き来できない。版8）
+        try { localStorage.setItem(BACKUP, JSON.stringify({ at: new Date().toISOString(), d: cur })); } catch (e) {
           try { replaceAll(cur); } catch (e2) { partial = true; throw e2; }
           throw e;
         }
@@ -493,7 +498,7 @@
       el("div", { class: "hk-row" }, [btn("取り込む", tryImport, true, "hk-go"), el("label", { class: "hk-file" }, [document.createTextNode("ファイルを開く"), fileIn])]),
     ];
     var b = readBackup();
-    var undoPart = b ? [el("h3", { text: "取り込む前に戻す" }), el("p", { text: when(new Date(b.at)).replace("に作った", "の控え") + "があります。" }),
+    var undoPart = b ? [el("h3", { text: "取り込む前に戻す" }), el("p", { text: when(new Date(b.at)).replace("に作った", "の控え") + (count(b.d) ? "があります。" : "（記録が無い状態）があります。") }),
       el("div", { class: "hk-row" }, [btn("控えに戻す", function () { confirmUndo(b); }, false, "hk-undo")])] : [];
     show([el("h2", { id: "hk-title", text: "引き継ぎ" })].concat(sendPart, getPart, undoPart, [el("div", { class: "hk-row" }, [btn("閉じる", close, false, "hk-close")])]),
       count(d) ? "#hk-close" : "#hk-in");

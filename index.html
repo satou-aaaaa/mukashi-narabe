@@ -315,6 +315,7 @@ function lateDays(s, k = todayKey()) { const out = []; let d = prevDay(k); for (
 const fresh = () => ({ v: 1, days: {}, hdays: {}, late: {}, seen: {}, one: {}, ebest: 0, runs: {}, ach: {}, kofi: {}, ended: [], tut: false, t: 0 });
 let mem = null; // 保存できない環境では、開いているあいだだけここに置く
 const isObj = (x) => x && typeof x === "object" && !Array.isArray(x);
+const okRes = (x) => isObj(x) && Number.isFinite(+x.m) && Number.isFinite(+x.h); // 途中経過の1問ぶん（壊れた記録でホームを止めない。2026-11-07 CodeRabbit）
 const prog = (r) => (r && Array.isArray(r.res) ? r.res.length * 1e4 + (r.cur ? (r.cur.p || 0) * 100 + (r.cur.m || 0) + (r.cur.h || 0) * 10 + 1 : 0) : -1);
 // 2つの記録を合わせる：日ごとの結果は先にあったほう、数は大きいほう、途中経過は同じ回なら進んだほう。片方にしか無い入れ物も残す
 function merge(a, b) {
@@ -332,7 +333,7 @@ function merge(a, b) {
 function clean(s) {
   s = Object.assign(fresh(), isObj(s) ? s : {}); for (const k of ["days", "hdays", "late", "seen", "one", "runs", "ach", "kofi"]) if (!isObj(s[k])) s[k] = {}; s.ebest = +s.ebest || 0;
   s.ended = Array.isArray(s.ended) ? s.ended.filter((x) => typeof x === "string").slice(-40) : [];
-  for (const m in s.runs) { const r = s.runs[m]; if (!isObj(r) || !Array.isArray(r.res) || !Array.isArray(r.list) || typeof r.date !== "string" || s.ended.includes(r.id)) delete s.runs[m]; }
+  for (const m in s.runs) { const r = s.runs[m]; if (!isObj(r) || !Array.isArray(r.res) || !Array.isArray(r.list) || typeof r.date !== "string" || s.ended.includes(r.id) || !r.res.every(okRes) || !r.list.every((q) => G.valid(q))) delete s.runs[m]; }
   return s;
 }
 function load() { let a = null, b = null; try { b = JSON.parse(localStorage.getItem(KEY)); } catch (e) {} try { a = mem !== null ? JSON.parse(mem) : null; } catch (e) {} if (a && a.v !== 1) a = null; if (b && b.v !== 1) b = null; if (!a || !b) return clean(a || b); return clean(merge(clean(a), clean(b))); }

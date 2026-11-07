@@ -36,6 +36,7 @@ const T = G.TALES;
   check("お話は25以上（好きなだけ遊べる数。game-dev.md F6）", T.length >= 25, T.length);
   check("番号（id）は0から順に並ぶ（今日の問題の番号。足すのは最後だけ）", T.every((t, i) => t.id === i));
   check("同じ文の場面が、ほかのお話にも無い（どのお話の場面か迷わない）", new Set(T.flatMap((t) => t.s)).size === T.length * 7);
+  check("お話は32話以上（2026-11-07 に5話足した。今日の3話は DAILY_MAX_ID まで）", T.length >= 32 && G.DAILY_MAX_ID < T.length);
   check("妖怪・神話のお話を入れない（神話・妖怪のゲームと分ける）", !/雪女|酒呑童子|因幡|八岐|河童|天狗|やまんば|山姥|鬼婆/.test(T.map((t) => t.t).join("")));
 }
 // 2. 今日の3話・上級（3年分）

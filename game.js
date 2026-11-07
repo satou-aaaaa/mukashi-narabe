@@ -74,22 +74,27 @@
   // ★：まちがい＋ヒントの数（0で★3・1で★2・2以上で★1）
   const starsOf = (r) => { const n = (r.m || 0) + (r.h || 0); return n <= 0 ? 3 : n === 1 ? 2 : 1; };
 
+  // 練習・とことんのカードを混ぜる：お話の順のまま・逆順のままにしない（今日・上級の deal と同じ決まり。2026-11-07 CodeRabbit）
+  function mix(cards, r) {
+    for (let i = 0; i < 20; i++) { const d = shuffle(cards, r); if (cards.length < 3 || (d.join() !== cards.join() && d.join() !== cards.slice().reverse().join())) return d; }
+    return cards.slice(1).concat(cards[0]);
+  }
   // ---- とことん：お話を毎回ちがう順に、カードは4枚から始めて6話ごとに1枚ふやす（7枚まで、9話目から上級と同じ）。1つの並びの中で同じお話は出さない ----
   function endlessSize(i) { return Math.min(7, 4 + Math.floor(i / 3)); }
   function endlessList(r, avoid, from) {
     let ids = shuffle(TALES.map((t) => t.id), r);
     if (avoid != null && ids[0] === avoid) ids = ids.slice(1).concat(ids[0]);
-    return ids.map((t, j) => { const n = endlessSize((from || 0) + j), first = n < 7; const q = { t, first, s: pickScenes(t, n, r, first) }; q.deal = shuffle(first ? q.s.slice(1) : q.s, r); if (q.deal.join() === (first ? q.s.slice(1) : q.s).join()) q.deal.reverse(); return q; });
+    return ids.map((t, j) => { const n = endlessSize((from || 0) + j), first = n < 7; const q = { t, first, s: pickScenes(t, n, r, first) }; q.deal = mix(first ? q.s.slice(1) : q.s, r); return q; });
   }
   // 練習：選んだお話を、6枚（はじめの場面を見せる）か7枚全部で
-  function practiceQ(t, r, full) { const q = { t, first: !full, s: pickScenes(t, full ? 7 : 6, r, !full) }; q.deal = shuffle(q.first ? q.s.slice(1) : q.s, r); if (q.deal.join() === (q.first ? q.s.slice(1) : q.s).join()) q.deal.reverse(); return q; }
+  function practiceQ(t, r, full) { const q = { t, first: !full, s: pickScenes(t, full ? 7 : 6, r, !full) }; q.deal = mix(q.first ? q.s.slice(1) : q.s, r); return q; }
   // 問題の形が正しいか（保存してあった問題を使う前に確かめる）
   function valid(q) {
-    if (!q || !TALES[q.t] || !Array.isArray(q.s) || !Array.isArray(q.deal)) return false;
+    if (!q || !Number.isInteger(q.t) || !TALES[q.t] || !Array.isArray(q.s) || !Array.isArray(q.deal)) return false;
     const L = TALES[q.t].s.length, s = q.s;
     if (!s.every((i, j) => Number.isInteger(i) && i >= 0 && i < L && (j === 0 || i > s[j - 1]))) return false;
     const need = (q.first ? s.slice(1) : s).slice().sort((a, b) => a - b).join();
-    return q.deal.slice().sort((a, b) => a - b).join() === need && (!q.first || s[0] === 0);
+    return q.deal.length > 0 && q.deal.every(Number.isInteger) && q.deal.slice().sort((a, b) => a - b).join() === need && (!q.first || s[0] === 0);
   }
 
   const api = { TALES, EPOCH, DAILY_MAX_ID, SIZES, HARD_N, seedOf, rng, shuffle, dayNo, permOf, dailyList, hardList, pickScenes, deal, starsOf, endlessList, endlessSize, practiceQ, valid };

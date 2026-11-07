@@ -312,7 +312,7 @@ function lateDays(s, k = todayKey()) { const out = []; let d = prevDay(k); for (
 
 // ---- 記録（この端末の localStorage だけ）----
 // days・hdays・late：日ごとの結果 {r:[{m,h}]}。seen：お話ごとに並べた回数・one：一度で並べた回数。runs：モードごとの途中経過
-const fresh = () => ({ v: 1, days: {}, hdays: {}, late: {}, seen: {}, one: {}, ebest: 0, runs: {}, ach: {}, kofi: {}, tut: false, t: 0 });
+const fresh = () => ({ v: 1, days: {}, hdays: {}, late: {}, seen: {}, one: {}, ebest: 0, runs: {}, ach: {}, kofi: {}, ended: [], tut: false, t: 0 });
 let mem = null; // 保存できない環境では、開いているあいだだけここに置く
 const isObj = (x) => x && typeof x === "object" && !Array.isArray(x);
 const prog = (r) => (r && Array.isArray(r.res) ? r.res.length * 1e4 + (r.cur ? (r.cur.p || 0) * 100 + (r.cur.m || 0) + (r.cur.h || 0) * 10 + 1 : 0) : -1);
@@ -323,11 +323,18 @@ function merge(a, b) {
   for (const k of ["seen", "one"]) { s[k] = Object.assign({}, o[k], n[k]); for (const q in o[k] || {}) s[k][q] = Math.max(+o[k][q] || 0, +(n[k] || {})[q] || 0); }
   s.ebest = Math.max(+o.ebest || 0, +n.ebest || 0);
   s.tut = !!(o.tut || n.tut);
+  s.ended = [...new Set([...(Array.isArray(o.ended) ? o.ended : []), ...(Array.isArray(n.ended) ? n.ended : [])])].slice(-40);
   s.runs = Object.assign({}, o.runs, n.runs);
   for (const m in o.runs || {}) { const x = o.runs[m], y = (n.runs || {})[m]; if (x && y && x.id === y.id && prog(x) > prog(y)) s.runs[m] = x; }
   return s;
 }
-function clean(s) { s = Object.assign(fresh(), isObj(s) ? s : {}); for (const k of ["days", "hdays", "late", "seen", "one", "runs", "ach", "kofi"]) if (!isObj(s[k])) s[k] = {}; s.ebest = +s.ebest || 0; return s; }
+// 形のこわれた途中経過・終えた回（ended）は捨てる（ホームを止めない・古いタブの写しで終えた回を戻さない。2026-11-07 CodeRabbit）
+function clean(s) {
+  s = Object.assign(fresh(), isObj(s) ? s : {}); for (const k of ["days", "hdays", "late", "seen", "one", "runs", "ach", "kofi"]) if (!isObj(s[k])) s[k] = {}; s.ebest = +s.ebest || 0;
+  s.ended = Array.isArray(s.ended) ? s.ended.filter((x) => typeof x === "string").slice(-40) : [];
+  for (const m in s.runs) { const r = s.runs[m]; if (!isObj(r) || !Array.isArray(r.res) || !Array.isArray(r.list) || typeof r.date !== "string" || s.ended.includes(r.id)) delete s.runs[m]; }
+  return s;
+}
 function load() { let a = null, b = null; try { b = JSON.parse(localStorage.getItem(KEY)); } catch (e) {} try { a = mem !== null ? JSON.parse(mem) : null; } catch (e) {} if (a && a.v !== 1) a = null; if (b && b.v !== 1) b = null; if (!a || !b) return clean(a || b); return clean(merge(clean(a), clean(b))); }
 // 保存の前に読み直す（別のタブで進めた記録を消さない）
 function save(fn) { const s = load(); fn(s); s.t = Math.max(Date.now(), (s.t || 0) + 1); const j = JSON.stringify(s); try { localStorage.setItem(KEY, j); mem = null; } catch (e) { mem = j; } return s; }
@@ -382,7 +389,7 @@ function show(html) { VIEW++; app.innerHTML = html; bindFooter(); window.scrollT
 // ---- ホーム ----
 function home() {
   const s = load(), k = todayKey(), done = s.days[k], hdone = s.hdays[k];
-  for (const m of ["d", "h"]) { const r = s.runs[m]; if (r && r.date === k && r.res.length >= r.list.length) return finish(m); }
+  for (const m of ["d", "h"]) { const r = s.runs[m]; if (r && r.res.length >= r.list.length) return finish(m); } // 日付が変わっても、解き終えた回は記録してから次へ（2026-11-07 CodeRabbit）
   const met = metSet(s).size, nr = nextRank(met);
   const rd = s.runs.d && s.runs.d.date === k ? s.runs.d : null, rh = s.runs.h && s.runs.h.date === k ? s.runs.h : null;
   const back = !done && Object.keys(s.days).length && !s.days[prevDay(k)] && !s.late[prevDay(k)];
@@ -474,7 +481,7 @@ function paint(fresh) {
   const q = cur.q, t = T[q.t], ord = orderOf(q), placed = (q.first ? [0] : []).concat(ord.slice(0, cur.p));
   $("line").innerHTML = q.s.map((sc, j) => j < placed.length ? `<li class="${q.first && j === 0 ? "given" : ""}${fresh && j === placed.length - 1 ? " new" : ""}">${esc(t.s[placed[j]])}${q.first && j === 0 ? "（はじめ）" : ""}</li>` : `<li class="empty">${j === placed.length && !cur.done ? "つぎは？" : "　"}</li>`).join("");
   const left = cardsOf(q).filter((c) => !ord.slice(0, cur.p).includes(c)), next = ord[cur.p];
-  $("cards").innerHTML = cur.done ? "" : left.map((c) => `<button type="button" data-c="${c}"${cur.hl && c === next ? ` class="hint" aria-label="ヒント：${esc(t.s[c])}"` : ""}>${esc(t.s[c])}</button>`).join("");
+  $("cards").innerHTML = cur.done ? "" : left.map((c) => `<button type="button" data-c="${c}" data-a11y-say${cur.hl && c === next ? ` class="hint" aria-label="ヒント：${esc(t.s[c])}"` : ""}>${esc(t.s[c])}</button>`).join("");
   $("cards").querySelectorAll("button").forEach((b) => (b.onclick = () => pick(+b.dataset.c, b)));
   $("ask").textContent = cur.done ? "" : `${placed.length + 1}番目に起きることは？`;
   $("st").textContent = cur.done ? "" : `まちがい ${cur.m}・ヒント ${cur.h}`;
@@ -546,6 +553,7 @@ function finish(key) {
     if (book && !book[run.date] && run.res.length >= run.list.length) { book[run.date] = rec; first = true; }
     const seen = s.ach || {}; got = achDone(s).filter((n) => !seen[n]); got.forEach((n) => { seen[n] = 1; }); s.ach = seen;
     const c = s.runs[key]; if (c && c.id === run.id) delete s.runs[key];
+    if (run.id) s.ended = (s.ended || []).concat(run.id).slice(-40);
   });
   result(run.mode, run.date, first, rec, got, run);
 }
@@ -571,7 +579,7 @@ function result(mode, k, first, prec, fresh, run) {
     ${daily ? `<div class="share">${esc(text)}</div>
     <button class="main" id="share">結果をシェア</button>
     <div class="shares"><a id="toX" target="_blank" rel="noopener">Xで投稿</a><a id="toLine" target="_blank" rel="noopener">LINEで送る</a><button id="copy">コピー</button></div>
-    <p class="note">🟩一度で　🟨まちがい・ヒント1回　🟧2回より多い<br>次の3話まで あと <b>${untilNext()}</b></p>` : ""}
+    <p class="note">🟩一度で　🟨まちがい・ヒント1回　🟧2回以上<br>次の3話まで あと <b>${untilNext()}</b></p>` : ""}
     <button class="main alt" id="go-e">続けて遊ぶ：とことん${s.ebest ? `（最高 ${s.ebest}）` : ""}</button>
     <div class="row">${mode === "d" && k === todayKey() && !s.hdays[k] ? `<button class="sub" id="go-h">上級に挑む</button>` : ""}<button class="sub" id="go-p">練習する</button><button class="sub" id="go-dex">お話帳</button></div>
     ${showKofi ? `<p class="note">楽しめたら、<a href="https://ko-fi.com/satouaaaaa" target="_blank" rel="noopener">Ko-fi でコーヒー1杯の応援</a>をもらえると、新しいゲームづくりの励みになります（任意・遊ぶのはずっと無料）。</p>` : ""}
@@ -645,7 +653,7 @@ function cal(ym) {
   document.querySelectorAll(".cal button").forEach((b) => (b.onclick = () => startRun("a", b.dataset.k)));
 }
 
-window.__mk = { G, load, save, achList, nextAch, lateDays, todayKey, shareText, streak, cur: () => cur, pick: (c) => pick(c), hint: () => hint(), play: (k) => play(k), home: () => home(), startRun: (m, o) => startRun(m, o), next: () => orderOf(cur.q)[cur.p] };
+window.__mk = { G, load, save, achList, nextAch, lateDays, todayKey, prevDay, shareText, streak, cur: () => cur, pick: (c) => pick(c), hint: () => hint(), play: (k) => play(k), home: () => home(), startRun: (m, o) => startRun(m, o), next: () => orderOf(cur.q)[cur.p] };
 home();
 if ("serviceWorker" in navigator && location.protocol === "https:" && /github\.io$/.test(location.hostname)) navigator.serviceWorker.register("sw.js").catch(() => {});
 </script>

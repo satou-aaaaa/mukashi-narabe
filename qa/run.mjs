@@ -2,7 +2,7 @@
 // 使い方: node qa/run.mjs   失敗があれば終了コード 1。結果は qa-report/report.md。
 import { spawnSync } from "node:child_process";
 import { chromium } from "playwright";
-import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createHash } from "node:crypto";
@@ -69,13 +69,13 @@ const T = G.TALES;
     const r = G.rng(G.seedOf("qa-e:" + t)), avoid = t % 3 ? t % T.length : undefined, from = (t % 4) * 9, L = G.endlessList(r, avoid, from);
     if (L.length !== T.length || new Set(L.map((q) => q.t)).size !== T.length) { bad.push(t + ":数"); continue; }
     if (avoid !== undefined && L[0].t === avoid) bad.push(t + ":つなぎ目");
-    L.forEach((q, j) => { const n = G.endlessSize(from + j); if (!G.valid(q) || q.s.length !== (n < 7 ? n + 1 : 7) || q.deal.length !== n || (q.deal.length >= 2 && q.deal.join() === (q.first ? q.s.slice(1) : q.s).join())) bad.push(t + ":" + j); });
+    L.forEach((q, j) => { const n = G.endlessSize(from + j); if (!G.valid(q) || q.s.length !== (n < 7 ? n + 1 : 7) || q.deal.length !== n || (q.deal.length >= 3 && [(q.first ? q.s.slice(1) : q.s).join(), (q.first ? q.s.slice(1) : q.s).slice().reverse().join()].includes(q.deal.join()))) bad.push(t + ":" + j); });
   }
-  check("とことん：全部のお話を1回ずつ・続けて同じお話を出さない・カードは4枚から3話ごとに1枚ふやし7枚まで（400回）", bad.length === 0, bad.slice(0, 5).join(","));
+  check("とことん：全部のお話を1回ずつ・続けて同じお話を出さない・カードは4枚から3話ごとに1枚ふやし7枚まで・お話の順のまま／逆順のままにしない（400回）", bad.length === 0, bad.slice(0, 5).join(","));
   const pb = [];
-  for (let t = 0; t < 300; t++) { const q = G.practiceQ(t % T.length, G.rng(G.seedOf("qa-p:" + t)), t % 2 === 1); if (!G.valid(q) || q.t !== t % T.length || (t % 2 ? q.deal.length !== 7 : q.deal.length !== 6)) pb.push(t); }
-  check("練習：選んだお話を、6枚（はじめを見せる）か7枚全部で（300回）", pb.length === 0, pb.slice(0, 5).join(","));
-  check("こわれた問題は使わない（valid）", !G.valid({ t: 99, s: [0], deal: [] }) && !G.valid({ t: 0, first: true, s: [0, 2, 1], deal: [2, 1] }) && !G.valid({ t: 0, first: true, s: [0, 1, 2], deal: [1, 3] }));
+  for (let t = 0; t < 300; t++) { const q = G.practiceQ(t % T.length, G.rng(G.seedOf("qa-p:" + t)), t % 2 === 1); const c = q.first ? q.s.slice(1) : q.s; if (!G.valid(q) || q.t !== t % T.length || (t % 2 ? q.deal.length !== 7 : q.deal.length !== 6) || q.deal.join() === c.join() || q.deal.join() === c.slice().reverse().join()) pb.push(t); }
+  check("練習：選んだお話を、6枚（はじめを見せる）か7枚全部で・お話の順のまま／逆順のままにしない（300回）", pb.length === 0, pb.slice(0, 5).join(","));
+  check("こわれた問題は使わない（valid）", !G.valid({ t: 99, s: [0], deal: [] }) && !G.valid({ t: 0, first: true, s: [0, 2, 1], deal: [2, 1] }) && !G.valid({ t: 0, first: true, s: [0, 1, 2], deal: [1, 3] }) && !G.valid({ t: "constructor", s: [0], deal: [0] }) && !G.valid({ t: 0, first: true, s: [0], deal: [] }) && !G.valid({ t: 0, first: true, s: [0, 1, 2], deal: ["2", 1] }));
   check("★：まちがい＋ヒント 0で★3・1で★2・2以上で★1", G.starsOf({ m: 0, h: 0 }) === 3 && G.starsOf({ m: 1, h: 0 }) === 2 && G.starsOf({ m: 0, h: 1 }) === 2 && G.starsOf({ m: 1, h: 1 }) === 1);
 }
 // 4. 決まりの言葉（好きなだけ遊べる・お笑いを入れない・外へ送らない）
@@ -87,7 +87,7 @@ const T = G.TALES;
   check("Ko-fi はただのリンクだけ（スクリプトを入れない）", !/ko-fi\.com\/widgets|<script[^>]+ko-fi/i.test(html));
   const sw = readFileSync(path.join(root, "sw.js"), "utf8"), shell = JSON.parse(sw.match(/SHELL = (\[[^\]]+\])/)[1].replace(/'/g, '"'));
   { const st = await checkSwStall(sw); check("PWA：本文の途中で通信が止まっても4秒で保存したものを返す・ふつうはネットの返事", st.ok, JSON.stringify(st)); }
-  check("PWA：sw.js の SHELL に画面のファイルが全部ある・取り直して保存する（cache: reload）", ["./", "./index.html", "./data.js", "./game.js", "./transfer.js", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"].every((f) => shell.includes(f)) && /cache: "reload"/.test(sw) && /CACHE = "mukashi-narabe-/.test(sw));
+  check("PWA：sw.js の SHELL に画面のファイルが全部ある・取り直して保存する（cache: reload）", ["./", "./index.html", "./data.js", "./game.js", "./transfer.js", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-512-maskable.png"].every((f) => shell.includes(f)) && shell.filter((f) => f !== "./").every((f) => existsSync(path.join(root, f))) && /cache: "reload"/.test(sw) && /CACHE = "mukashi-narabe-/.test(sw));
   const mf = JSON.parse(readFileSync(path.join(root, "manifest.webmanifest"), "utf8"));
   check("PWA：manifest の名前・アイコン（192・512・maskable）", mf.name === "昔話ならべ" && mf.icons.length === 3 && mf.icons.some((i) => i.purpose === "maskable"));
   check("記録の名前の行に gitleaks:allow がある", html.split("\n").concat(readFileSync(path.join(root, "qa/run.mjs"), "utf8").split("\n")).filter((l) => l.includes(KEY) && !l.includes("filter((l) => l.includes(KEY)")).every((l) => /gitleaks:allow/.test(l)));
@@ -173,9 +173,10 @@ try {
   check("上級の記録がつく", await page.evaluate(() => { const s = window.__mk.load(); return !!s.hdays[window.__mk.todayKey()] && s.hdays[window.__mk.todayKey()].r.length === 2; }));
   // とことん
   await page.click("#go-e");
-  for (let j = 0; j < 4; j++) { await solveCur(page); await page.click("#next"); }
+  for (let j = 0; j < 3; j++) { await solveCur(page); await page.click("#next"); }
   c = await cur(page);
-  check("とことん：4話目からカードが5枚にふえる", c.n === 5, c.n);
+  check("とことん：4話目からカードが5枚にふえる", c.i === 3 && c.n === 5, c.i + ":" + c.n);
+  await solveCur(page); await page.click("#next"); c = await cur(page);
   { const w = c.deal.find((x) => x !== c.next); await page.click(`#cards button[data-c="${w}"]`); }
   check("とことん：まちがえても終わらない", !(await cur(page)).done && (await page.locator("#quit").count()) === 1);
   await solveCur(page); await page.click("#next");
@@ -250,6 +251,9 @@ try {
     check("保存に失敗したあと別のタブが保存しても、両方の日ごとの結果を残し、数は大きいほう", await p.evaluate((K) => { const s0 = window.__mk.load(); mem = JSON.stringify(Object.assign({}, s0, { t: 5, days: { "2000-01-01": { r: [] } }, seen: { 3: 9 }, ebest: 7 })); localStorage.setItem(K, JSON.stringify(Object.assign({}, s0, { t: 9, days: { "2000-01-02": { r: [] } }, seen: { 3: 2 }, ebest: 3 }))); const r = window.__mk.load(); mem = null; return !!r.days["2000-01-01"] && !!r.days["2000-01-02"] && r.seen[3] === 9 && r.ebest === 7; }, KEY));
     check("同じ回の途中経過は、進んだほう（新しく保存したタブが遅れていても）", await p.evaluate((K) => { const s0 = window.__mk.load(), base = { mode: "d", date: "2000-01-01", list: [], id: "x" }; mem = JSON.stringify(Object.assign({}, s0, { t: 5, runs: { d: Object.assign({}, base, { res: [{ m: 0, h: 0 }] }) } })); localStorage.setItem(K, JSON.stringify(Object.assign({}, s0, { t: 9, runs: { d: Object.assign({}, base, { res: [] }) } }))); const r = window.__mk.load(); mem = null; return r.runs.d.res.length === 1; }, KEY));
     check("こわれた記録でも画面が出る（入れ物を補う）", await p.evaluate((K) => { localStorage.setItem(K, JSON.stringify({ v: 1, days: 5, seen: null, runs: "x" })); try { window.__mk.home(); return !!document.getElementById("go-d"); } catch (e) { return false; } }, KEY));
+    check("今日の途中経過の形がこわれていても（res が無い）ホームが出る", await p.evaluate((K) => { localStorage.setItem(K, JSON.stringify({ v: 1, tut: true, runs: { d: { mode: "d", date: window.__mk.todayKey(), id: "q" } } })); try { window.__mk.home(); return !!document.getElementById("go-d") && !window.__mk.load().runs.d; } catch (e) { return false; } }, KEY));
+    check("「ここで降りる」で終えた回は、古いタブの写しと合わせても戻らない", await p.evaluate((K) => { const base = { mode: "e", date: "2000-01-01", list: [], res: [{ m: 0, h: 0 }], id: "endrun" }; localStorage.setItem(K, JSON.stringify({ v: 1, tut: true, t: 9, ended: ["endrun"], runs: {} })); mem = JSON.stringify({ v: 1, tut: true, t: 5, runs: { e: base } }); const r = window.__mk.load(); mem = null; return !r.runs.e; }, KEY));
+    check("きのう解き終えて結果を見ずに閉じた回も、次に開いたとき記録する", await p.evaluate((K) => { const y = window.__mk.prevDay(window.__mk.todayKey()), list = window.MKG.dailyList(y); localStorage.setItem(K, JSON.stringify({ v: 1, tut: true, t: 1, runs: { d: { mode: "d", date: y, id: "yy", list, res: list.map(() => ({ m: 0, h: 0 })), cur: null } } })); window.__mk.home(); const s = window.__mk.load(); return !!s.days[y] && !s.runs.d; }, KEY));
     check("保存してあった問題がこわれていたら、使わずにホームへ戻る", await p.evaluate((K) => { localStorage.setItem(K, JSON.stringify({ v: 1, tut: true, runs: { p: { mode: "p", date: "x", id: "z", res: [], list: [{ t: 0, first: true, s: [0, 9], deal: [9] }] } } })); window.__mk.play("p"); return !!document.getElementById("go-d") && !window.__mk.load().runs.p; }, KEY));
     await p.close(); }
 

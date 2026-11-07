@@ -1,0 +1,8 @@
+{
+  "screens": [
+    { "name": "今日の3話", "click": ["#go-d"] },
+    { "name": "練習", "click": ["#go-p"] },
+    { "name": "お話帳", "click": ["#go-dex"] },
+    { "name": "カレンダー", "click": ["#go-cal"] }
+  ]
+}

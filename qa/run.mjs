@@ -202,6 +202,21 @@ try {
   check("お話帳：出会ったお話は押すと全部の場面が読める、まだのお話は「？？？」（点線）", (await page.locator(".res .no").count()) > 0 && (await page.locator('.res button[data-t="3"]').count()) === 1);
   await page.click('.res button[data-t="3"]');
   check("お話帳のお話：7つの場面と「このお話を並べてみる」", (await page.locator(".line li").count()) === 7 && (await page.locator("#again").count()) === 1);
+  // おさらい：まちがえた・ヒントを見たお話を、一度で並べるまで出す
+  { await page.evaluate(() => window.__mk.home()); await page.click("#go-p");
+    const rv = await page.evaluate(() => window.__mk.reviewIds(window.__mk.load()));
+    check("おさらい：今日の3話でまちがえたお話が練習の上に「おさらい」として出る（一度で並べた練習のお話は出ない）", rv.length >= 2 && rv.includes(G.dailyList(k)[0].t) && !rv.includes(3) && (await page.textContent("#rev")).includes(rv.length + "話"), JSON.stringify(rv));
+    await page.click("#rev");
+    const got = [];
+    for (let g = 0; g < 6; g++) { const cc = await cur(page); got.push(cc.t); if (g === 0) { const wrong = await page.evaluate(() => { const n = window.__mk.next(); return [...document.querySelectorAll("#cards button")].map((b) => +b.dataset.c).find((x) => x !== n); }); await page.click(`#cards button[data-c="${wrong}"]`); } await solveCur(page); const lbl = await page.textContent("#next"); await page.click("#next"); if (lbl.includes("練習のまとめ")) break; }
+    check("おさらい：古いまちがいから順に、そのお話を出す（題を見て並べる）", JSON.stringify(got) === JSON.stringify(rv.slice(0, 5)), JSON.stringify(got));
+    const rv2 = await page.evaluate(() => window.__mk.reviewIds(window.__mk.load()));
+    check("おさらい：一度で並べたお話は消え、またまちがえたお話は残る", rv2.length === 1 && rv2[0] === rv[0] && (await page.locator("#go-rev").count()) === 1, JSON.stringify(rv2));
+    check("おさらいは今日の記録に入らない", await page.evaluate((d) => JSON.stringify(window.__mk.load().days) === JSON.stringify(d), s1.days));
+    await page.click("#go-rev"); await solveCur(page); await page.click("#next");
+    check("おさらいが全部すむと、おさらいのボタンが消える", (await page.evaluate(() => window.__mk.reviewIds(window.__mk.load()).length)) === 0 && (await page.locator("#go-rev").count()) === 0);
+    const mg = await page.evaluate((K) => { const s = window.__mk.load(), put = (m, f) => { localStorage.setItem(K, JSON.stringify(Object.assign({}, s, { miss: m, fix: f }))); return window.__mk.reviewIds(window.__mk.load()).join(); }; const r = [put({ 7: 200 }, { 7: 100 }), put({ 7: 100 }, { 7: 200 }), put({ 7: "x", 8: 50 }, "x")]; localStorage.setItem(K, JSON.stringify(s)); return r; }, KEY);
+    check("おさらい：まちがいが一度で並べたより新しいときだけ出す・こわれた記録でも止まらない", JSON.stringify(mg) === JSON.stringify(["7", "", "8"]), JSON.stringify(mg)); }
   await page.close();
 
   // あとから（取りこぼした日）・カレンダー

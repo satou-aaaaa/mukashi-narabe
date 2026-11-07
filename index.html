@@ -312,7 +312,8 @@ function lateDays(s, k = todayKey()) { const out = []; let d = prevDay(k); for (
 
 // ---- 記録（この端末の localStorage だけ）----
 // days・hdays・late：日ごとの結果 {r:[{m,h}]}。seen：お話ごとに並べた回数・one：一度で並べた回数。runs：モードごとの途中経過
-const fresh = () => ({ v: 1, days: {}, hdays: {}, late: {}, seen: {}, one: {}, ebest: 0, runs: {}, ach: {}, kofi: {}, ended: [], tut: false, t: 0 });
+// miss・fix：お話ごとに、まちがい・ヒントがあった時刻と一度で並べた時刻。miss が新しいお話がおさらいに出る
+const fresh = () => ({ v: 1, days: {}, hdays: {}, late: {}, seen: {}, one: {}, ebest: 0, runs: {}, ach: {}, kofi: {}, ended: [], tut: false, miss: {}, fix: {}, t: 0 });
 let mem = null; // 保存できない環境では、開いているあいだだけここに置く
 const isObj = (x) => x && typeof x === "object" && !Array.isArray(x);
 const okRes = (x) => isObj(x) && Number.isFinite(+x.m) && Number.isFinite(+x.h); // 途中経過の1問ぶん（壊れた記録でホームを止めない。2026-11-07 CodeRabbit）
@@ -321,7 +322,7 @@ const prog = (r) => (r && Array.isArray(r.res) ? r.res.length * 1e4 + (r.cur ? (
 function merge(a, b) {
   const [n, o] = (a.t || 0) >= (b.t || 0) ? [a, b] : [b, a], s = Object.assign(fresh(), o, n);
   for (const k of ["days", "hdays", "late", "ach", "kofi"]) s[k] = Object.assign({}, n[k], o[k]);
-  for (const k of ["seen", "one"]) { s[k] = Object.assign({}, o[k], n[k]); for (const q in o[k] || {}) s[k][q] = Math.max(+o[k][q] || 0, +(n[k] || {})[q] || 0); }
+  for (const k of ["seen", "one", "miss", "fix"]) { s[k] = Object.assign({}, o[k], n[k]); for (const q in o[k] || {}) s[k][q] = Math.max(+o[k][q] || 0, +(n[k] || {})[q] || 0); }
   s.ebest = Math.max(+o.ebest || 0, +n.ebest || 0);
   s.tut = !!(o.tut || n.tut);
   s.ended = [...new Set([...(Array.isArray(o.ended) ? o.ended : []), ...(Array.isArray(n.ended) ? n.ended : [])])].slice(-40);
@@ -331,7 +332,7 @@ function merge(a, b) {
 }
 // 形のこわれた途中経過・終えた回（ended）は捨てる（ホームを止めない・古いタブの写しで終えた回を戻さない。2026-11-07 CodeRabbit）
 function clean(s) {
-  s = Object.assign(fresh(), isObj(s) ? s : {}); for (const k of ["days", "hdays", "late", "seen", "one", "runs", "ach", "kofi"]) if (!isObj(s[k])) s[k] = {}; s.ebest = +s.ebest || 0;
+  s = Object.assign(fresh(), isObj(s) ? s : {}); for (const k of ["days", "hdays", "late", "seen", "one", "runs", "ach", "kofi", "miss", "fix"]) if (!isObj(s[k])) s[k] = {}; s.ebest = +s.ebest || 0;
   s.ended = Array.isArray(s.ended) ? s.ended.filter((x) => typeof x === "string").slice(-40) : [];
   for (const m in s.runs) { const r = s.runs[m]; if (!isObj(r) || !Array.isArray(r.res) || !Array.isArray(r.list) || typeof r.date !== "string" || s.ended.includes(r.id) || !r.res.every(okRes) || !r.list.every((q) => G.valid(q))) delete s.runs[m]; }
   return s;
@@ -347,6 +348,8 @@ const RANKS = [[0, "聞き手"], [5, "昔話好き"], [12, "語りの見習い"]
 const rankOf = (n) => RANKS.filter((r) => n >= r[0]).pop()[1];
 const nextRank = (n) => RANKS.find((r) => r[0] > n);
 const one = (r) => r && !r.m && !r.h;
+// おさらい：まちがえた（ヒントを見た）あと、まだ一度で並べていないお話。古いまちがいから
+const reviewIds = (s) => T.map((t) => t.id).filter((id) => (+s.miss[id] || 0) > (+s.fix[id] || 0)).sort((a, b) => s.miss[a] - s.miss[b]);
 const okRec = (x) => x && Array.isArray(x.r) && x.r.every((r) => r && typeof r.m === "number");
 // 実績：腕前（一度で・上級）は今日の3話・上級・あとからで数え、集める（出会ったお話）は練習・とことんも数える
 function achList(s) {
@@ -419,12 +422,14 @@ function home() {
   if (!s.tut) openHow();
 }
 function practiceMenu() {
-  const s = load(), met = metSet(s);
+  const s = load(), met = metSet(s), rv = reviewIds(s);
   show(`<header><button class="icon" id="back" aria-label="もどる">←</button><h1>練習<small>何度でも・今日の記録には入りません</small></h1><span></span></header>
     <p class="note" data-a11y-say>お話を選ぶと、6枚の場面を並べます。✓ は出会ったお話です。</p>
+    ${rv.length ? `<button class="main" id="rev">おさらい：まちがえたお話 ${rv.length}話<small>（一度で並べると消える）</small></button>` : ""}
     <button class="main alt" id="rand">まだ出会っていないお話から</button>
     <div class="res">${T.map((t) => `<button data-t="${t.id}"><span>${met.has(t.id) ? "✓ " : ""}${esc(t.t)}<small>${esc(t.y)}</small></span><span aria-hidden="true">▶</span></button>`).join("")}</div>${footer()}`);
   $("back").onclick = home;
+  if ($("rev")) $("rev").onclick = () => startRun("p", "rev");
   $("rand").onclick = () => { const L = T.filter((t) => !met.has(t.id)), P = L.length ? L : T; startRun("p", P[Math.floor(Math.random() * P.length)].id); };
   document.querySelectorAll(".res button").forEach((b) => (b.onclick = () => startRun("p", +b.dataset.t)));
 }
@@ -438,6 +443,7 @@ function startRun(mode, opt) {
     let list;
     if (mode === "d" || mode === "h") list = listOf(mode, k);
     else if (mode === "a") list = G.dailyList(opt);
+    else if (mode === "p" && opt === "rev") list = reviewIds(s).slice(0, 5).map((id) => G.practiceQ(id, G.rng(G.seedOf("rev:" + Date.now() + ":" + id)), false)); // おさらいは古いまちがいから5話まで
     else if (mode === "p") list = T[opt] ? [G.practiceQ(opt, Math.random, false)] : [];
     else { if (s.runs.e && s.runs.e.res && s.runs.e.res.length < s.runs.e.list.length) return; list = G.endlessList(Math.random, s.elast, 0); }
     if (!list.length) { ok = false; return; }
@@ -527,6 +533,7 @@ function deliver() {
     r.res.push(rec); r.cur = null;
     s.seen[q.t] = (+s.seen[q.t] || 0) + 1;
     if (one(rec)) s.one[q.t] = (+s.one[q.t] || 0) + 1;
+    if (one(rec)) s.fix[q.t] = Math.max(Date.now(), (+s.miss[q.t] || 0) + 1); else s.miss[q.t] = Math.max(Date.now(), (+s.fix[q.t] || 0) + 1);
     if (r.mode === "e") { if (one(rec)) r.n1 = (r.n1 || 0) + 1; s.ebest = Math.max(s.ebest, r.n1 || 0); s.elast = q.t; }
     fin = r.mode !== "e" && r.res.length >= r.list.length;
   });
@@ -540,7 +547,7 @@ function deliver() {
     <p class="sim"><b>このお話から：</b>${esc(t.k)}</p>
     ${t.a ? `<p class="note"><a href="${esc(t.a)}" target="_blank" rel="noopener">青空文庫で、このお話を読む</a></p>` : ""}
     <p class="note">${rec.m || rec.h ? `まちがい${rec.m}・ヒント${rec.h}。` : "まちがいもヒントもなしで並べられました。"}</p>
-    <button class="main" id="next">${cur.mode === "p" ? "練習のまとめへ" : fin ? "結果を見る" : "次のお話へ"}</button></div>`;
+    <button class="main" id="next">${cur.mode === "p" ? (fin ? "練習のまとめへ" : "次のお話へ") : fin ? "結果を見る" : "次のお話へ"}</button></div>`;
   say(`できた。${t.t}。${t.k}`);
   $("next").onclick = () => play(cur.key);
   later(() => { if ($("next")) { $("next").focus({ preventScroll: true }); $("next").scrollIntoView({ behavior: document.documentElement.classList.contains("a11y-calm") ? "auto" : "smooth", block: "nearest" }); } }, 60);
@@ -583,6 +590,7 @@ function result(mode, k, first, prec, fresh, run) {
     <div class="shares"><a id="toX" target="_blank" rel="noopener">Xで投稿</a><a id="toLine" target="_blank" rel="noopener">LINEで送る</a><button id="copy">コピー</button></div>
     <p class="note">🟩一度で　🟨まちがい・ヒント1回　🟧2回以上<br>次の3話まで あと <b>${untilNext()}</b></p>` : ""}
     <button class="main alt" id="go-e">続けて遊ぶ：とことん${s.ebest ? `（最高 ${s.ebest}）` : ""}</button>
+    ${reviewIds(s).length ? `<button class="sub" id="go-rev">おさらい：まちがえたお話 ${reviewIds(s).length}話</button>` : mode === "p" && run && run.list.length > 1 ? `<p class="note">おさらいは全部すみました。</p>` : ""}
     <div class="row">${mode === "d" && k === todayKey() && !s.hdays[k] ? `<button class="sub" id="go-h">上級に挑む</button>` : ""}<button class="sub" id="go-p">練習する</button><button class="sub" id="go-dex">お話帳</button></div>
     ${showKofi ? `<p class="note">楽しめたら、<a href="https://ko-fi.com/satouaaaaa" target="_blank" rel="noopener">Ko-fi でコーヒー1杯の応援</a>をもらえると、新しいゲームづくりの励みになります（任意・遊ぶのはずっと無料）。</p>` : ""}
     ${footer()}`);
@@ -590,6 +598,7 @@ function result(mode, k, first, prec, fresh, run) {
   $("go-e").onclick = () => startRun("e");
   $("go-p").onclick = practiceMenu;
   $("go-dex").onclick = () => dex();
+  if ($("go-rev")) $("go-rev").onclick = () => startRun("p", "rev");
   if ($("go-h")) $("go-h").onclick = () => (k === todayKey() ? startRun("h") : home());
   if (daily) {
     const withUrl = text + "\n" + SITE;
@@ -655,7 +664,7 @@ function cal(ym) {
   document.querySelectorAll(".cal button").forEach((b) => (b.onclick = () => startRun("a", b.dataset.k)));
 }
 
-window.__mk = { G, load, save, achList, nextAch, lateDays, todayKey, prevDay, shareText, streak, cur: () => cur, pick: (c) => pick(c), hint: () => hint(), play: (k) => play(k), home: () => home(), startRun: (m, o) => startRun(m, o), next: () => orderOf(cur.q)[cur.p] };
+window.__mk = { G, load, save, reviewIds, achList, nextAch, lateDays, todayKey, prevDay, shareText, streak, cur: () => cur, pick: (c) => pick(c), hint: () => hint(), play: (k) => play(k), home: () => home(), startRun: (m, o) => startRun(m, o), next: () => orderOf(cur.q)[cur.p] };
 home();
 if ("serviceWorker" in navigator && location.protocol === "https:" && /github\.io$/.test(location.hostname)) navigator.serviceWorker.register("sw.js").catch(() => {});
 </script>

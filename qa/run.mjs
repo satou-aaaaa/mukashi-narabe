@@ -274,7 +274,7 @@ try {
 
   // 保存に失敗したら知らせる（2026-11-07 暑さ指数よみで見つけた。黙って記録が消えないように）
   { const p = await newPage();
-    check("保存に失敗したら、遊んでいる途中でも知らせる（1回だけ）", await p.evaluate(async () => { const orig = Storage.prototype.setItem; Storage.prototype.setItem = function () { throw new Error("full"); }; const n0 = document.querySelectorAll(".toast").length; window.__mk.save(() => {}); window.__mk.save(() => {}); await new Promise((r) => setTimeout(r, 50)); const ts = [...document.querySelectorAll(".toast")].slice(n0).map((d) => d.textContent); Storage.prototype.setItem = orig; window.__mk.save(() => {}); return ts.length === 1 && ts[0].includes("保存できませんでした"); }));
+    check("保存に失敗したら、保存できるまで知らせ続け、保存できたら消す", await p.evaluate(async () => { const orig = Storage.prototype.setItem; Storage.prototype.setItem = function () { throw new Error("full"); }; window.__mk.save(() => {}); window.__mk.save(() => {}); const one = document.querySelectorAll("#savewarn").length === 1 && document.getElementById("savewarn").textContent.includes("保存できませんでした"); await new Promise((r) => setTimeout(r, 2500)); const stay = !!document.getElementById("savewarn"); Storage.prototype.setItem = orig; window.__mk.save(() => {}); return one && stay && !document.getElementById("savewarn"); }));
     await p.close(); }
 
   // 引き継ぎコード（shared-workflows template/qa/transfer-check.mjs）

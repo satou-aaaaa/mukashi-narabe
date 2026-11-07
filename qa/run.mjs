@@ -272,6 +272,11 @@ try {
     check("押せる所は高さ44px以上（ホーム・遊ぶ画面）", !s1b.length && !s2.length && !s3.length, JSON.stringify([s1b, s2, s3]));
     await p.close(); }
 
+  // 保存に失敗したら知らせる（2026-11-07 暑さ指数よみで見つけた。黙って記録が消えないように）
+  { const p = await newPage();
+    check("保存に失敗したら、遊んでいる途中でも知らせる（1回だけ）", await p.evaluate(async () => { const orig = Storage.prototype.setItem; Storage.prototype.setItem = function () { throw new Error("full"); }; const n0 = document.querySelectorAll(".toast").length; window.__mk.save(() => {}); window.__mk.save(() => {}); await new Promise((r) => setTimeout(r, 50)); const ts = [...document.querySelectorAll(".toast")].slice(n0).map((d) => d.textContent); Storage.prototype.setItem = orig; window.__mk.save(() => {}); return ts.length === 1 && ts[0].includes("保存できませんでした"); }));
+    await p.close(); }
+
   // 引き継ぎコード（shared-workflows template/qa/transfer-check.mjs）
   { const sample = { [KEY]: JSON.stringify({ v: 1, tut: true, days: { "2026-11-07": { r: [{ m: 0, h: 0 }] } }, hdays: {}, late: {}, seen: { 0: 1, 5: 2 }, one: { 0: 1 }, ebest: 4, runs: {}, ach: {}, kofi: {}, t: 1 }) };
     await checkTransfer({ browser, url, game: "mukashi-narabe", sample, check, open: async (page) => { await page.evaluate(() => { const d = document.getElementById("howto"); if (d.open) d.close(); }); } }); }

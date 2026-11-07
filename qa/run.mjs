@@ -56,6 +56,7 @@ const T = G.TALES;
   check("同じお話が次に今日の3話に出るまで4日以上あく（つなぎ目でもすぐ戻さない。3年分）", gap.m >= 4, gap.m);
   check("30日で全部のお話が出る", seen.size === G.DAILY_MAX_ID + 1, seen.size);
   // 過去と先の日の問題が変わらない（データを足しても・作り方を直しても。F7）。値は 2026-11-07 に作った
+  { let err = ""; try { for (const k of ["2026-11-06", "2026-10-01", "2025-01-01"]) { G.dailyList(k); G.hardList(k); if (G.dayNo(k) !== 1) err = k + " #" + G.dayNo(k); } } catch (e) { err = e.message; } check("時計が第1回より前にずれていても今日の問題が作れる（番号は #1）", !err, err); }
   const snap = createHash("sha256").update(JSON.stringify([...Array(120)].map((_, n) => [G.dailyList(day(n)), G.hardList(day(n))]))).digest("hex").slice(0, 16);
   check("はじめの120日の今日の3話・上級は前と同じ（変えると過去の日の問題が変わる）", snap === "816e671095b38abc", snap);
   check("乱数は sort の比較の中で引かない", !/sort\([^)]*r\(\)/.test(gameSrc + html));

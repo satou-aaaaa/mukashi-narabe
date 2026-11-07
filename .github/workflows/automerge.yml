@@ -22,10 +22,10 @@ jobs:
       # Pages を「ブランチから公開」にしているときは true。Actions で公開しているときは dispatch: "pages.yml"
       pages_build: true
       delete_branch: true
-      # 同じコミットで ✅ が要る検査（改行区切り）。Secret scan を入れたリポジトリは QA の check 名（qa.yml の job の name）と "scan / scan"
+      # 同じコミットで ✅ が要る検査（改行区切り）。Secret scan を入れたリポジトリは QA の check 名（ひな形の qa.yml なら "qa / qa"）と "scan / scan"
       # きっかけが Secret scan のとき recheck_main は secret-scan.yml を起こそうとするので、false にして dispatch に qa.yml を足す
       require_checks: |
-        qa
+        qa / qa
         scan / scan
       # PWA の仕組みを変える PR は自動ではマージせず、CodeRabbit のレビューを読んでから手でマージ（AGENTS.md。shared-workflows incidents/2026-11-01-roppo-merged-before-review.md）
       hold_paths: '^(sw\.js|manifest\.webmanifest)$'

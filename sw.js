@@ -31,8 +31,9 @@ self.addEventListener("fetch", (e) => {
     const slow = setTimeout(() => fromCache().then((hit) => hit && send(hit)), 4000);
     setTimeout(() => fromCache().then((hit) => send(hit || Response.error())), 60000); // 保存が無く通信も返らないときも、60秒で必ず返事をする（読み込み中のまま止めない。2026-11-05 CodeRabbit）
     net.then((res) => {
+      // ok の返事は本文を読み終えてから返す（本文の途中で止まったら 4 秒で保存したものへ切り替える。2026-11-07 CodeRabbit）
+      if (res.ok) return res.clone().arrayBuffer().then(() => { clearTimeout(slow); send(res); }, () => { clearTimeout(slow); fromCache().then((hit) => send(hit || Response.error())); });
       clearTimeout(slow);
-      if (res.ok) return send(res);
       if (res.status >= 500) return fromCache().then((hit) => send(hit || res));
       send(res);
     }, () => { clearTimeout(slow); fromCache().then((hit) => send(hit || Response.error())); });

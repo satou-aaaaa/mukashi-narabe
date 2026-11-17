@@ -294,6 +294,12 @@ try {
     check("保存できない帯は、長い画面を下までスクロールしても画面の上に見えている（body の高さで止まらない）", await p.evaluate(async () => { const orig = Storage.prototype.setItem; Storage.prototype.setItem = function () { throw new Error("full"); }; window.__mk.save(() => {}); const pad = document.createElement("div"); pad.style.height = "3000px"; document.body.appendChild(pad); scrollTo(0, document.documentElement.scrollHeight); await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); const b = document.getElementById("savewarn"), r = b && b.getBoundingClientRect(); const ok = !!r && scrollY > 1000 && r.top >= -1 && r.top < 5; pad.remove(); scrollTo(0, 0); Storage.prototype.setItem = orig; window.__mk.save(() => {}); return ok && !document.getElementById("savewarn"); }));
     await p.close(); }
 
+  // 直した不具合がもどっていないか（保存できないときの帯・知らせ・ヒント・とことん・ホームの題）
+  { // 知らせ（.toast）は下のボタンを押すじゃまをしない
+    const pt = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await pt.goto(url);
+    check("知らせ（.toast）の pointer-events が none（出ているあいだも下のボタンを押せる）", (await pt.evaluate(() => { const d = document.createElement("div"); d.className = "toast"; d.textContent = "x"; document.body.appendChild(d); const v = getComputedStyle(d).pointerEvents; d.remove(); return v; })) === "none");
+    await pt.close(); }
   // 引き継ぎコード（shared-workflows template/qa/transfer-check.mjs）
   { const sample = { [KEY]: JSON.stringify({ v: 1, tut: true, days: { "2026-11-07": { r: [{ m: 0, h: 0 }] } }, hdays: {}, late: {}, seen: { 0: 1, 5: 2 }, one: { 0: 1 }, ebest: 4, runs: {}, ach: {}, kofi: {}, t: 1 }) };
     await checkTransfer({ browser, url, game: "mukashi-narabe", sample, check, open: async (page) => { await page.evaluate(() => { const d = document.getElementById("howto"); if (d.open) d.close(); }); } }); }

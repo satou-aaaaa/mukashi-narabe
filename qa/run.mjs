@@ -174,10 +174,12 @@ try {
   check("上級の記録がつく", await page.evaluate(() => { const s = window.__mk.load(); return !!s.hdays[window.__mk.todayKey()] && s.hdays[window.__mk.todayKey()].r.length === 2; }));
   // とことん
   await page.click("#go-e");
-  for (let j = 0; j < 3; j++) { await solveCur(page); await page.click("#next"); }
+  // とことんで一度で並べたお話（並びは毎回ちがう。今日の3話と重なると、そのお話はおさらいから消えるのが正しい）
+  const eClean = [];
+  for (let j = 0; j < 3; j++) { eClean.push((await cur(page)).t); await solveCur(page); await page.click("#next"); }
   c = await cur(page);
   check("とことん：4話目からカードが5枚にふえる", c.i === 3 && c.n === 5, c.i + ":" + c.n);
-  await solveCur(page); await page.click("#next"); c = await cur(page);
+  eClean.push(c.t); await solveCur(page); await page.click("#next"); c = await cur(page);
   { const w = c.deal.find((x) => x !== c.next); await page.click(`#cards button[data-c="${w}"]`); }
   check("とことん：まちがえても終わらない", !(await cur(page)).done && (await page.locator("#quit").count()) === 1);
   await solveCur(page); await page.click("#next");
@@ -205,7 +207,7 @@ try {
   // おさらい：まちがえた・ヒントを見たお話を、一度で並べるまで出す
   { await page.evaluate(() => window.__mk.home()); await page.click("#go-p");
     const rv = await page.evaluate(() => window.__mk.reviewIds(window.__mk.load()));
-    check("おさらい：今日の3話でまちがえたお話が練習の上に「おさらい」として出る（一度で並べた練習のお話は出ない）", rv.length >= 2 && rv.includes(G.dailyList(k)[0].t) && !rv.includes(3) && (await page.textContent("#rev")).includes(rv.length + "話"), JSON.stringify(rv));
+    check("おさらい：今日の3話でまちがえたお話が練習の上に「おさらい」として出る（一度で並べた練習のお話は出ない）", rv.length >= 2 && (rv.includes(G.dailyList(k)[0].t) || eClean.includes(G.dailyList(k)[0].t)) && !rv.includes(3) && (await page.textContent("#rev")).includes(rv.length + "話"), JSON.stringify([rv, eClean]));
     await page.click("#rev");
     const got = [];
     for (let g = 0; g < 6; g++) { const cc = await cur(page); got.push(cc.t); if (g === 0) { const wrong = await page.evaluate(() => { const n = window.__mk.next(); return [...document.querySelectorAll("#cards button")].map((b) => +b.dataset.c).find((x) => x !== n); }); await page.click(`#cards button[data-c="${wrong}"]`); } await solveCur(page); const lbl = await page.textContent("#next"); await page.click("#next"); if (lbl.includes("練習のまとめ")) break; }

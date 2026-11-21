@@ -193,21 +193,23 @@ try {
   // 練習・お話帳
   await page.click("#go-p");
   check("練習：全部のお話から選べる（題を見て選ぶ）", (await page.locator(".res button").count()) === T.length);
-  await page.click('.res button[data-t="3"]');
+  // 練習で選ぶお話は、今日の3話・上級と重ならないものにする（重なると、練習で一度で並べたお話がおさらいから消え、その日だけ「おさらい」の検査が落ちる。2026-11-22 は今日の1話目が 3 だった）
+  const PT = [3, 4, 5, 10, 14].find((id) => !G.dailyList(k).concat(G.hardList(k)).some((q) => q.t === id));
+  await page.click(`.res button[data-t="${PT}"]`);
   c = await cur(page);
-  check("練習：選んだお話を6枚で", c.t === 3 && c.mode === "p" && c.n === 6);
+  check("練習：選んだお話を6枚で", c.t === PT && c.mode === "p" && c.n === 6);
   await solveCur(page);
   check("練習のあとは「練習のまとめへ」", (await page.textContent("#next")).includes("練習のまとめ"));
   await page.click("#next");
   check("練習は今日の記録に入らない", await page.evaluate((d) => JSON.stringify(window.__mk.load().days) === JSON.stringify(d), s1.days));
   await page.click("#go-dex");
-  check("お話帳：出会ったお話は押すと全部の場面が読める、まだのお話は「？？？」（点線）", (await page.locator(".res .no").count()) > 0 && (await page.locator('.res button[data-t="3"]').count()) === 1);
-  await page.click('.res button[data-t="3"]');
+  check("お話帳：出会ったお話は押すと全部の場面が読める、まだのお話は「？？？」（点線）", (await page.locator(".res .no").count()) > 0 && (await page.locator(`.res button[data-t="${PT}"]`).count()) === 1);
+  await page.click(`.res button[data-t="${PT}"]`);
   check("お話帳のお話：7つの場面と「このお話を並べてみる」", (await page.locator(".line li").count()) === 7 && (await page.locator("#again").count()) === 1);
   // おさらい：まちがえた・ヒントを見たお話を、一度で並べるまで出す
   { await page.evaluate(() => window.__mk.home()); await page.click("#go-p");
     const rv = await page.evaluate(() => window.__mk.reviewIds(window.__mk.load()));
-    check("おさらい：今日の3話でまちがえたお話が練習の上に「おさらい」として出る（一度で並べた練習のお話は出ない）", rv.length >= 2 && (rv.includes(G.dailyList(k)[0].t) || eClean.includes(G.dailyList(k)[0].t)) && !rv.includes(3) && (await page.textContent("#rev")).includes(rv.length + "話"), JSON.stringify([rv, eClean]));
+    check("おさらい：今日の3話でまちがえたお話が練習の上に「おさらい」として出る（一度で並べた練習のお話は出ない）", rv.length >= 2 && (rv.includes(G.dailyList(k)[0].t) || eClean.includes(G.dailyList(k)[0].t)) && !rv.includes(PT) && (await page.textContent("#rev")).includes(rv.length + "話"), JSON.stringify([rv, eClean]));
     await page.click("#rev");
     const got = [];
     for (let g = 0; g < 6; g++) { const cc = await cur(page); got.push(cc.t); if (g === 0) { const wrong = await page.evaluate(() => { const n = window.__mk.next(); return [...document.querySelectorAll("#cards button")].map((b) => +b.dataset.c).find((x) => x !== n); }); await page.click(`#cards button[data-c="${wrong}"]`); } await solveCur(page); const lbl = await page.textContent("#next"); await page.click("#next"); if (lbl.includes("練習のまとめ")) break; }

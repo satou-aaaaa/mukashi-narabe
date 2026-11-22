@@ -14,6 +14,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const url = pathToFileURL(path.join(root, "index.html")).href;
 const results = [];
 const check = (name, ok, detail = "") => results.push({ name, ok: !!ok, detail: String(detail).slice(0, 500) });
+const firstClose = async (q) => { if (await q.locator("#howto[open]").count()) await q.click("#howto-ok"); if (await q.locator("#core-coach").count()) { await q.evaluate(() => Core.coach.leave()); await q.waitForTimeout(100); } }; // はじめての練習の吹き出しをやめてホームへ（sync-template の migrateFirstQa が足した）
 const G = createRequire(import.meta.url)(path.join(root, "game.js"));
 const html = readFileSync(path.join(root, "index.html"), "utf8");
 const gameSrc = readFileSync(path.join(root, "game.js"), "utf8");
@@ -106,17 +107,17 @@ async function newPage(opt = {}) {
   await p.goto(url);
   return p;
 }
-const closeHow = (p) => p.evaluate(() => { const d = document.getElementById("howto"); if (d.open) document.getElementById("howto-ok").click(); });
+const closeHow = (p) => p.evaluate(() => { const d = document.getElementById("howto"); if (d.open) document.getElementById("howto-ok").click(); if (window.Core && Core.coach && Core.coach.active()) Core.coach.leave(); });
 const cur = (p) => p.evaluate(() => { const c = window.__mk.cur(); return c && { t: c.q.t, n: c.q.deal.length, p: c.p, m: c.m, h: c.h, done: c.done, mode: c.mode, i: c.i, next: c.done ? null : window.__mk.next(), deal: c.q.deal }; });
 async function tapNext(p) { const c = await cur(p); await p.click(`#cards button[data-c="${c.next}"]`); }
 async function solveCur(p) { for (let g = 0; g < 10; g++) { const c = await cur(p); if (c.done) break; await tapNext(p); } await p.waitForSelector("#next"); }
 try {
   browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
   const page = await newPage();
-  check("はじめて開くと遊び方が出る", await page.evaluate(() => document.getElementById("howto").open));
+  check("はじめて開くと、遊び方の窓でなく吹き出しが出る", await page.evaluate(() => !document.getElementById("howto").open && !!document.getElementById("core-coach")));
   { const p0 = await newPage(); let bad = 0;
     for (let j = 0; j < 10; j++) { await p0.evaluate((K) => localStorage.removeItem(K), KEY); await p0.reload(); await p0.keyboard.press("Escape"); if (await p0.evaluate((K) => !(JSON.parse(localStorage.getItem(K) || "{}").tut), KEY)) bad++; await p0.reload(); if (await p0.evaluate(() => document.getElementById("howto").open)) bad++; }
-    await p0.evaluate((K) => localStorage.removeItem(K), KEY); await p0.reload(); await p0.click("#howto-ok");
+    await p0.evaluate((K) => localStorage.removeItem(K), KEY); await p0.reload(); await firstClose(p0);
     const atOnce = await p0.evaluate((K) => !!(JSON.parse(localStorage.getItem(K) || "{}").tut), KEY);
     check("遊び方：Esc で閉じても「見た」が残り、すぐ読み直しても出ない（10回）・「わかった」を押したその場で残る", bad === 0 && atOnce, bad);
     await p0.close(); }
@@ -306,7 +307,7 @@ try {
     await pt.close(); }
   // 引き継ぎコード（shared-workflows template/qa/transfer-check.mjs）
   { const sample = { [KEY]: JSON.stringify({ v: 1, tut: true, days: { "2026-11-07": { r: [{ m: 0, h: 0 }] } }, hdays: {}, late: {}, seen: { 0: 1, 5: 2 }, one: { 0: 1 }, ebest: 4, runs: {}, ach: {}, kofi: {}, t: 1 }) };
-    await checkTransfer({ browser, url, game: "mukashi-narabe", sample, check, open: async (page) => { await page.evaluate(() => { const d = document.getElementById("howto"); if (d.open) d.close(); }); } }); }
+    await checkTransfer({ browser, url, game: "mukashi-narabe", sample, check, open: async (page) => { await page.evaluate(() => { const d = document.getElementById("howto"); if (d.open) d.close(); if (window.Core && Core.coach && Core.coach.active()) Core.coach.leave(); }); } }); }
 } catch (e) {
   check("QA の操作が最後まで完了する", false, e.message.split("\n")[0]);
 } finally {

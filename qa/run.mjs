@@ -17,6 +17,8 @@ const check = (name, ok, detail = "") => results.push({ name, ok: !!ok, detail: 
 const firstClose = async (q) => { if (await q.locator("#howto[open]").count()) await q.click("#howto-ok"); if (await q.evaluate(() => !!(window.Core && Core.coach && Core.coach.active()))) { await q.evaluate(() => { Core.coach.leave(); scrollTo(0, 0); }); await q.waitForTimeout(100); } }; // はじめての練習の吹き出しをやめてホームへ（sync-template の migrateFirstQa が足した）
 const G = createRequire(import.meta.url)(path.join(root, "game.js"));
 const html = readFileSync(path.join(root, "index.html"), "utf8");
+// ひな形の写し（<!-- 名前:begin〜end -->）はゲームの言葉ではないので外し、Core.kofi・Core.KOFI は写す前の形にもどして見る（shared-workflows の sync-template が足した）
+const gameOwn = (t) => t.replace(/<!-- ([a-z0-9-]+):begin[\s\S]*?<!-- \1:end -->/g, "").split("${Core.KOFI}").join("https://ko-fi.com/satouaaaaa").replace(/Core\.kofi\(("(?:[^"\\]|\\.)*"), ("(?:[^"\\]|\\.)*")\)/g, (m, a, b) => "`<p class=\"note kofi\">" + JSON.parse(a) + "、<a href=\"https://ko-fi.com/satouaaaaa\" target=\"_blank\" rel=\"noopener\">Ko-fi でコーヒー1杯の応援</a>をもらえると、" + JSON.parse(b) + "の励みになります（任意・遊ぶのはずっと無料）。</p>`");
 const gameSrc = readFileSync(path.join(root, "game.js"), "utf8");
 const dataSrc = readFileSync(path.join(root, "data.js"), "utf8");
 const KEY = "mukashi-narabe-v1"; // gitleaks:allow 記録の名前（鍵ではない）
@@ -82,11 +84,11 @@ const T = G.TALES;
 }
 // 4. 決まりの言葉（好きなだけ遊べる・お笑いを入れない・外へ送らない）
 {
-  const vis = html.replace(/<!-- a11y:begin[\s\S]*?<!-- a11y:end -->/, "");
+  const vis = gameOwn(html);
   check("チケット・回数制限・🔒で開くモードが無い（game-dev.md F1・F2）", !/🎫|チケット|すると開く|🔒|スタミナ|あと\d+回/.test(vis));
   check("お笑いの言葉を入れない（本物っぽさ優先）", !/（笑）|ツッコミ|ボケ|爆笑|w{3}(?!\.)/.test(vis + dataSrc));
   check("外へ通信しない（CSP の connect-src は 'self' だけ・fetch を使わない）", /connect-src 'self';/.test(html) && !/fetch\(|XMLHttpRequest|sendBeacon/.test(vis + gameSrc));
-  check("Ko-fi はただのリンクだけ（スクリプトを入れない）", !/ko-fi\.com\/widgets|<script[^>]+ko-fi/i.test(html));
+  check("Ko-fi はただのリンクだけ（スクリプトを入れない）", !/ko-fi\.com\/widgets|<script[^>]+ko-fi/i.test(gameOwn(html)));
   const sw = readFileSync(path.join(root, "sw.js"), "utf8"), shell = JSON.parse(sw.match(/SHELL = (\[[^\]]+\])/)[1].replace(/'/g, '"'));
   { const st = await checkSwStall(sw); check("PWA：本文の途中で通信が止まっても4秒で保存したものを返す・ふつうはネットの返事", st.ok, JSON.stringify(st)); }
   check("PWA：sw.js の SHELL に画面のファイルが全部ある・取り直して保存する（cache: reload）", ["./", "./index.html", "./data.js", "./game.js", "./transfer.js", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-512-maskable.png"].every((f) => shell.includes(f)) && shell.filter((f) => f !== "./").every((f) => existsSync(path.join(root, f))) && /cache: "reload"/.test(sw) && /CACHE = "mukashi-narabe-/.test(sw));

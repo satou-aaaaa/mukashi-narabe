@@ -235,6 +235,8 @@ try {
     await p.evaluate(() => { const RD = Date, off = 3 * 864e5; window.Date = class extends RD { constructor(...a) { if (a.length) super(...a); else super(RD.now() + off); } static now() { return RD.now() + off; } }; });
     await p.evaluate(() => window.__mk.home()); await p.click("#go-cal");
     const lt2 = await p.evaluate(() => window.__mk.lateDays(window.__mk.load()));
+    // 時計を3日進めると月が変わることがある（月末の3日）。いちばん近い取りこぼした日が前の月なら、前の月を開いてから探す（incidents/2026-11-28-qa-cal-month-end.md）
+    if (lt2.length && lt2[0].slice(0, 7) !== (await p.evaluate(() => window.__mk.todayKey())).slice(0, 7)) await p.click("#pm");
     check("カレンダー：あとから遊べる日は ▶（点線のボタン）", lt2.length > 0 && (await p.locator(`.cal button[data-k="${lt2[0]}"]`).count()) === 1, JSON.stringify(lt2));
     if (lt2.length) {
       const dk = lt2[0];
